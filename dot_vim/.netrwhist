@@ -1,0 +1,9 @@
+let g:netrw_dirhistmax  =10
+let g:netrw_dirhist_cnt =7
+let g:netrw_dirhist_1='/home/hpyu/work/2014/1125_514306_lockup_related_with_cp_when_shutdown'
+let g:netrw_dirhist_2='/home/hpyu/work/2014/1229_bug1151_PMUtimer_FastWakeup_coresight'
+let g:netrw_dirhist_3='/home/hpyu/src/SS.ARM64.3.14/kernel/kernel'
+let g:netrw_dirhist_4='/home/hpyu/src/j1_SS.ARM64.3.14/kernel/arch/arm64/boot/dts'
+let g:netrw_dirhist_5='/home/hpyu/src/SS.ARM64.3.14/kernel/arch/arm'
+let g:netrw_dirhist_6='/home/hpyu/emmd/armv8'
+let g:netrw_dirhist_7='/home/hpyu/src/crash-utility'
