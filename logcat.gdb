@@ -1,30 +1,43 @@
-define plogbuf_list
-	set $id = $arg0
-	set $head = $arg1
+# Extract logcat log from logd coredump
+# 
+# Why make this tool:
+#	Sometimes we need get logcat log from ramdump to check panic/hang issue.
+#	Before Android5.0, Andorid log buffers are in kernel space, crash extension logcat can do it
+#	Android5.0 move Android log buffers to userspace and managed by logd, so need extrace it from
+#	logd coredump
+#
+#	Usage:
+#		1. open ramdump by crash tool, get logd TGID
+#			crash> ps -G | grep logd 
+#		2. get coredump of logd
+#			crash>gcore -v0 TGID  #replace TGID with real number
+#		3. run script:
+#			./gdb.sh gcore.TGID.logd  #replace TGID with real number
+#		4. wait several minitues, Android log stored to logcat_logd.txt
+#
+#	Notice:
+#		Change ANDROID_SRC, SYMBOL abd logcat.gdb path in your environment before run gdb.sh
+#
+#	content of gdb.sh:
+#		cat gdb.sh
+#		export ANDROID_SRC=/home/hpyu/src/aloe
+#		export SYMBOL=/home/hpyu/issues/aloe/10_hang/dump/symbols
+#		echo "set solib-absolute-prefix $SYMBOL" > cmds.gdb
+#		echo "set solib-search-path $SYMBOL/system/lib/" >> cmds.gdb
+#		echo "source /home/hpyu/toolkit/logcat.gdb" >> cmds.gdb
+#		echo "logcat" >> cmds.gdb
+#		time $ANDROID_SRC/prebuilts/gcc/linux-x86/arm/arm-eabi-4.8/bin/arm-eabi-gdb $SYMBOL/system/bin/logd $1 -batch -x cmds.gdb
+#
+#	Writen by Haipeng.Yu, hpyu@live.cn
+
+
+define logcat_print_logbuf
+	set $head = $arg0
 	set $next = $head->mpNext
-	
-	if $id == 0
-		printf "============== MAIN log ==============\n"
-	end
-	if $id == 1
-		printf "============== RADIO log ==============\n"
-	end
-	if $id == 2
-		printf "============== EVENTS log ==============\n"
-	end
-	if $id == 3
-		printf "============== SYSTEM log ==============\n"
-	end
-	if $id == 4
-		printf "============== CRASH log ==============\n"
-	end
-	if $id == 5
-		printf "============== KERNEL log ==============\n"
-	end
-	
+		
 	while $next != $head
 
-		if $next->mVal->mLogId != $id
+		if $next->mVal->mLogId == 2 || $next->mVal->mLogId == 5
 			set $next = $next->mpNext
 			loop_continue
 		end
@@ -37,62 +50,40 @@ define plogbuf_list
 		end
 		set $p2  = $p1 + 1
 
-		printf "%d.%d  %d/%s (%d|%d) %s\n", $entry->mMonotonicTime.tv_sec, $entry->mMonotonicTime.tv_nsec, *(char *)$p, $p+1, $entry->mPid, $entry->mTid, $p2
+		printf "%d.%d  LOGID:%d %d/%s (%d|%d) %s\n", $entry->mMonotonicTime.tv_sec, $entry->mMonotonicTime.tv_nsec, $entry->mLogId, *(char *)$p, $p+1, $entry->mPid, $entry->mTid, $p2
 
 		set $next = $next->mpNext
 
 	end
 end
 
-# LOG_ID_MAIN = 0,     
-# LOG_ID_RADIO = 1,    
-# LOG_ID_EVENTS = 2,   
-# LOG_ID_SYSTEM = 3,   
-# LOG_ID_CRASH = 4,    
-# LOG_ID_KERNEL = 5,
-
 define logcat
 	dont-repeat
-	# change your symbol path accordingly
-	#set solib-search-path /home/hpyu/src/aloe/out/target/product/pxa1936aloe/symbols/system/lib/
-	#set solib-absolute-prefix  /home/hpyu/src/aloe/out/target/product/pxa1936aloe/symbols/
-	set solib-search-path /home/hpyu/issues/aloe/10_hang/dump/symbols/system/lib/
-	set solib-absolute-prefix  /home/hpyu/issues/aloe/10_hang/dump/symbols/
-	
-	#thread apply 2 bt
+
 	thread 2
 	frame 2
 	set pagination off
-	set logging file logcat_from_logd.txt
+	set logging file logcat_logd.txt
 	set logging on
 
-	set $id = 0
-	if $argc == 0
-		help logcat
-		set $num = 1
-	else
-		set $num = $arg0
-		if $num > 6
-			set $num = 6
-		end
-	end
+	printf "Extract Android log, LOG_ID as below, omit RADIO and KERNEL log, store to logcat_logd.txt\n"
+	printf "LOG_ID_MAIN   = 0\n"
+	printf "LOG_ID_RADIO  = 1\n"
+	printf "LOG_ID_EVENTS = 2\n"
+	printf "LOG_ID_SYSTEM = 3\n"
+	printf "LOG_ID_CRASH  = 4\n"
+	printf "LOG_ID_KERNEL = 5\n"
 
-	printf "id = %d, num = %d\n", $id, $num
-	
-	while $id < $num
-		plogbuf_list $id (this->mLogbuf->mLogElements->mpMiddle)
-
-		set $id = $id + 1
-	end
+	logcat_print_logbuf this->mLogbuf->mLogElements->mpMiddle
 
 	set logging off
 	set pagination on
 end
 
 document logcat
-	Extract Android log from logd and save to logcat_from_logd.txt.
-	Syntax: pvector <num>
-	Note: <num> is the number of buffer to extract, from 1 to 6 are main|audio|events|system|crash|kernel
+	Extract Android log from logd and save to logcat_logd.txt.
+	Syntax: logcat
+	Note: the extracted log are mixed with below log buffer.
 	Buffer id:
 		LOG_ID_MAIN = 0,     
 		LOG_ID_RADIO = 1,    
@@ -101,9 +92,5 @@ document logcat
 		LOG_ID_CRASH = 4,    
 		LOG_ID_KERNEL = 5,
 
-	Examples:
-	logcat - get main log by default
-	logcat 2 - get main and audio log buffer
-	logcat 5 - get all log buffer
 end
 
